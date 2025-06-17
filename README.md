@@ -1,13 +1,16 @@
 Intro
 -----
+
 This document describes a hybrid quicksort / mergesort named crumsort. The sort is in-place, unstable, adaptive, branchless, and has exceptional performance.
 
 Analyzer
 --------
+
 Crumsort starts out with an analyzer that sorts fully in-order or reverse-order arrays using n comparisons. It also obtains a measure of presortedness for 4 segments of the array and switches to [quadsort](https://github.com/scandum/quadsort) if a segment is more than 50% ordered.
 
 Partitioning
 ------------
+
 Partitioning is performed in a top-down manner similar to quicksort. Crumsort obtains the pseudomedian of 9 for partitions smaller than 2048 elements, and the median of 16 for paritions smaller than 65536. For larger partitions crumsort obtains the median of 128, 256, or 512 as an approximation of the cubic root of the partition size. While the square root is optimal in theory, the law of diminishing returns appears to apply to increasing the number of pivot candidates. Hardware limitations need to be factored in as well.
 
 For large partitions crumsort will swap 128-512 random elements to the start of the array, sort them with quadsort, and take the center right element. Using pseudomedian instead of median selection on large arrays is slower, likely due to cache pollution.
@@ -16,7 +19,9 @@ The median element obtained will be referred to as the pivot. Partitions that gr
 
 Fulcrum Partition
 -----------------
+
 After obtaining a pivot the array is parsed from start to end using the fulcrum partitioning scheme. The scheme is similar to the original quicksort scheme known as the Hoare partition with some notable differences. The differences are perhaps best explained with two code examples.
+
 ```c
 int hoare_partition(int array[], int head, int tail)
 {
@@ -85,18 +90,21 @@ int fulcrum_partition(int array[], int head, int tail)
         }
 }
 ```
+
 Instead of using multiple swaps the fulcrum partition creates a 1 element swap space, with the pivot holding the original data. Doing so turns the 3 assignments from the swap into 2 assignments. Overall the fulcrum partition has a 10-20% performance improvement.
 
 The swap space of the fulcrum partition can easily be increased from 1 to 32 elements to allow it to perform 16 boundless comparisons at a time, which in turn also allows it to perform these comparisons in a branchless manner with little additional overhead.
 
 Worst case handling
 -------------------
+
 To avoid run-away recursion crumsort switches to quadsort for both partitions if one partition is less than 1/16th the size of the other partition. On a distribution of random unique values the observed chance of a false positive is 1 in 1,336 for the pseudomedian of 9 and approximately 1 in 500,000 for the median of 16.
 
 Combined with the analyzer crumsort starts out with this makes the existence of killer patterns unlikely, other than a 33-50% performance slowdown by prematurely triggering the use of quadsort.
 
 Branchless optimizations
 ------------------------
+
 Crumsort uses a branchless comparison optimization. The ability of quicksort to partition branchless was first described in "BlockQuicksort: How Branch Mispredictions don't affect Quicksort" by Stefan Edelkamp and Armin Weiss. Crumsort uses the fulcrum partitioning scheme where as BlockQuicksort uses a scheme resembling Hoare partitioning.
 
 Median selection uses a branchless comparison technique that selects the pseudomedian of 9 using 12 comparisons, and the pseudomedian of 25 using 42 comparisons.
@@ -105,34 +113,41 @@ These optimizations do not work as well when the comparisons themselves are bran
 
 Generic data optimizations
 --------------------------
+
 Crumsort uses a method that mimicks dual-pivot quicksort to improve generic data handling. If after a partition all elements were smaller or equal to the pivot, a reverse partition is performed, filtering out all elements equal to the pivot, next it carries on as usual. This typically only occurs when sorting tables with many identical values, like gender, age, etc. Crumsort has a small bias in its pivot selection to increase the odds of this happening. In addition, generic data performance is improved slightly by checking if the same pivot is chosen twice in a row, in which case it performs a reverse partition as well. Pivot retention was first introduced by [pdqsort](https://github.com/orlp/pdqsort).
 
 Small array optimizations
 -------------------------
+
 Most modern quicksorts use insertion sort for partitions smaller than 24 elements. Crumsort uses quadsort which has a dedicated small array sorting routine that outperforms insertion sort.
 
 Data Types
 ----------
+
 The C implementation of crumsort supports long doubles and 8, 16, 32, and 64 bit data types. By using pointers it's possible to sort any other data type, like strings.
 
 Interface
 ---------
+
 Crumsort uses the same interface as qsort, which is described in [man qsort](https://man7.org/linux/man-pages/man3/qsort.3p.html).
 
 Crumsort comes with the `crumsort_prim(void *array, size_t nmemb, size_t size)` function to perform primitive comparisons on arrays of 32 and 64 bit integers. Nmemb is the number of elements. Size should be either sizeof(int) or sizeof(long long) for signed integers, and sizeof(int) + 1 or sizeof(long long) + 1 for unsigned integers. Support for additional primitive as well as custom types can be added to fluxsort.h and quadsort.h.
 
 Porting
 -------
+
 People wanting to port crumsort might want to have a look at [fluxsort](https://github.com/scandum/fluxsort), which is a little bit simpler because it's stable and out of place. There's also [piposort](https://github.com/scandum/piposort), a simplified implementation of quadsort.
 
 Memory
 ------
+
 Crumsort uses 512 elements of stack memory, which is shared with quadsort. Recursion requires log n stack memory.
 
 Crumsort can be configured to use sqrt(n) memory, with a minimum memory requirement of 32 elements.
 
 Performance
 -----------
+
 Crumsort will begin to outperform fluxsort on random data right around 1,000,000 elements. Since it runs on 512 elements of auxiliary memory the sorting of ordered data will be slower than fluxsort for larger arrays.
 
 Crumsort being unstable will scramble pre-existing patterns, making it less adaptive than fluxsort, which will switch to quadsort when it detects the emergence of ordered data during the partitioning phase.
@@ -143,6 +158,7 @@ To take full advantage of branchless operations the cmp macro needs to be uncomm
 
 Big O
 -----
+
 ```
                  ┌───────────────────────┐┌───────────────────────┐
                  │comparisons            ││swap memory            │
@@ -161,12 +177,14 @@ Big O
 
 Variants
 --------
+
 - [crumsort-rs](https://github.com/google/crumsort-rs) is a parallelized Rust port of crumsort with a focus on random data.
 
 - [distcrum](https://github.com/mlochbaum/distcrum) is a crumsort / [rhsort](https://github.com/mlochbaum/rhsort) hybrid.
 
 Visualization
 -------------
+
 In the visualization below two tests are performed on 512 elements.
 
 1. Random order
